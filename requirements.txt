@@ -1,7 +1,7 @@
-# Compatible on Streamlit Cloud Python 3.12 (fixes TypedDict "closed" TypeError).
-streamlit==1.48.0
-typing_extensions>=4.14.0
+# Cloud often runs Python 3.14 — avoid st.bar_chart (Altair TypedDict bug); use matplotlib.
+streamlit>=1.40,<2
 pandas>=2.2,<3
+matplotlib>=3.8
 gspread==6.2.1
 google-auth>=2.29
 google-auth-oauthlib>=1.2

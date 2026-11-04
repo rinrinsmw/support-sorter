@@ -5,6 +5,7 @@ import json
 import os
 
 import gspread
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
@@ -47,6 +48,26 @@ def records_to_dataframe(records_json: str):
     if "version" in df.columns:
         df["version"] = df["version"].astype(str).str.strip()
     return df
+
+
+def show_bar_df(df: pd.DataFrame, ylim_max: float | None = None):
+    """Matplotlib bars — avoids st.bar_chart → Altair (broken on Python 3.14)."""
+    fig, ax = plt.subplots(figsize=(8, 3.2))
+    df.plot(kind="bar", ax=ax, color=["#444444", "#999999"], rot=0, legend=True)
+    ax.set_xlabel("")
+    if ylim_max is not None:
+        ax.set_ylim(0, ylim_max)
+    ax.grid(axis="y", linestyle="--", alpha=0.35)
+    fig.tight_layout()
+    st.pyplot(fig, clear_figure=True)
+
+
+def show_bar_series(series: pd.Series):
+    fig, ax = plt.subplots(figsize=(8, 3.2))
+    series.sort_values().plot(kind="barh", ax=ax, color="#666666")
+    ax.set_xlabel("Count")
+    fig.tight_layout()
+    st.pyplot(fig, clear_figure=True)
 
 
 st.sidebar.markdown("**Filters**")
@@ -114,12 +135,12 @@ acc = (
     .mean()
     .astype(float)
 )
-st.bar_chart(acc)
+show_bar_df(acc, ylim_max=1.0)
 
 left, right = st.columns(2)
 with left:
     st.subheader(f"Error types in {version}")
-    st.bar_chart(view["error_type"].value_counts().astype(float))
+    show_bar_series(view["error_type"].value_counts().astype(float))
 with right:
     st.subheader(f"Urgency: model vs answer key ({version})")
     st.dataframe(pd.crosstab(view["true_urgency"], view["pred_urgency"]))
