@@ -1,16 +1,13 @@
-# Dashboard + sheet (app.py)
-streamlit==1.40.1
-pandas==2.2.3
-numpy==1.26.4
-pyarrow==17.0.0
-gspread==6.2.1
+# Streamlit Cloud: keep this file installable on Python 3.12 (use prebuilt wheels, no tight pins).
+streamlit>=1.40,<2
+pandas>=2.2,<3
+gspread>=6.2
+google-auth>=2.29
 
-# Batch pipeline (sorter.py, build_dashboard_data.py)
-python-dotenv==1.2.4
-openai==3.37.0
-requests==2.34.2
-
-# REST API (api.py)
-fastapi==0.162.0
-uvicorn==0.54.0
-scalar-fastapi==1.9.1
+# Local batch + API (optional on Cloud; small pure-Python deps)
+python-dotenv>=1.0
+requests>=2.31
+openai>=3.0
+fastapi>=0.115
+uvicorn>=0.30
+scalar-fastapi>=1.0
