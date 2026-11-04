@@ -7,6 +7,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
+from streamlit.errors import StreamlitSecretNotFoundError
 
 SHEET_ID = "13ytynvOcmhLa5RzkA5zpEHwwX97kbykGwjDgUf6KV7w"
 TAB = "dashboard_data"   # the tab build_dashboard_data.py makes (one row per ticket per version)
@@ -15,12 +16,38 @@ TAB = "dashboard_data"   # the tab build_dashboard_data.py makes (one row per ti
 st.set_page_config(page_title="Support Sorter", layout="wide")
 
 
+def gspread_client():
+    """Streamlit Cloud: [gcp_service_account] in App settings → Secrets. Local: service_account.json."""
+    try:
+        if "gcp_service_account" in st.secrets:
+            return gspread.service_account_from_dict(dict(st.secrets["gcp_service_account"]))
+    except StreamlitSecretNotFoundError:
+        pass
+    except Exception as e:
+        st.error(f"Could not read **gcp_service_account** from Streamlit Secrets: {e}")
+        st.stop()
+
+    import os
+
+    if os.path.isfile("service_account.json"):
+        return gspread.service_account(filename="service_account.json")
+
+    st.error(
+        "Google credentials not found.\n\n"
+        "**On Streamlit Cloud:** open **Manage app → Settings → Secrets** and paste your "
+        "`[gcp_service_account]` block (same as `.streamlit/secrets.toml` locally). "
+        "Saving secrets does not use the repo file — you must paste in the Cloud UI.\n\n"
+        "**Locally:** keep `service_account.json` in the project root."
+    )
+    st.stop()
+
+
 # ---------- 1. Load the data ----------
 # @st.cache_data remembers the result, so the sheet is read at most once
 # every 600 seconds (10 min) instead of on every click.
 @st.cache_data(ttl=600)
 def load():
-    gc = gspread.service_account(filename="service_account.json")  # same login as sorter.py
+    gc = gspread_client()
     ws = gc.open_by_key(SHEET_ID).worksheet(TAB)                     # open the tab by name
     df = pd.DataFrame(ws.get_all_records())                          # header row becomes column names
     # Make sure the 0/1 columns are numbers, so averages work.
