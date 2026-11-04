@@ -1,6 +1,7 @@
 # app.py: Support Sorter dashboard in Streamlit
 # Run:  python -m streamlit run app.py
 
+import json
 import os
 
 import gspread
@@ -37,22 +38,15 @@ def fetch_records():
 
 
 @st.cache_data(ttl=600)
-def records_to_dataframe(records: tuple[tuple[str, str], ...]):
+def records_to_dataframe(records_json: str):
     """Cache sheet rows only — no st.secrets or Streamlit UI calls here."""
-    df = pd.DataFrame([dict(row) for row in records])
+    df = pd.DataFrame(json.loads(records_json))
     for col in ["category_correct", "urgency_correct", "false_high"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     if "version" in df.columns:
         df["version"] = df["version"].astype(str).str.strip()
     return df
-
-
-def records_cache_key(records: list) -> tuple[tuple[str, str], ...]:
-    if not records:
-        return ()
-    keys = list(records[0].keys())
-    return tuple(tuple(str(row.get(k, "")) for k in keys) for row in records)
 
 
 st.sidebar.markdown("**Filters**")
@@ -69,7 +63,7 @@ if raw is None:
     st.stop()
 
 try:
-    data = records_to_dataframe(records_cache_key(raw))
+    data = records_to_dataframe(json.dumps(raw, sort_keys=True))
 except Exception as e:
     st.error(f"Could not load sheet tab `{TAB}`: {type(e).__name__}: {e}")
     st.stop()
