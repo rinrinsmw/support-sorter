@@ -1,6 +1,7 @@
-# Let Streamlit Cloud / uv pick wheels for the runtime Python (no pandas source build).
-streamlit>=1.40,<1.45
-pandas>=2.2
-gspread>=6.2
+# Compatible on Streamlit Cloud Python 3.12 (fixes TypedDict "closed" TypeError).
+streamlit==1.48.0
+typing_extensions>=4.14.0
+pandas>=2.2,<3
+gspread==6.2.1
 google-auth>=2.29
 google-auth-oauthlib>=1.2
