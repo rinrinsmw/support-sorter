@@ -1,5 +1,6 @@
-# Streamlit Cloud — app.py only (fast install, no uvicorn/fastapi conflicts)
-streamlit==1.44.1
-pandas==2.2.3
-gspread==6.2.1
-google-auth==2.40.3
+# Let Streamlit Cloud / uv pick wheels for the runtime Python (no pandas source build).
+streamlit>=1.40,<1.45
+pandas>=2.2
+gspread>=6.2
+google-auth>=2.29
+google-auth-oauthlib>=1.2
