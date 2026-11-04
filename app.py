@@ -81,24 +81,37 @@ if st.sidebar.button("Refresh data"):
     st.rerun()
 view = data[data["version"] == version]
 
+n_tickets = int(len(view))
+cat_pct = float(view["category_correct"].mean()) if n_tickets else 0.0
+urg_pct = float(view["urgency_correct"].mean()) if n_tickets else 0.0
+n_false_high = int(view["false_high"].sum()) if n_tickets else 0
+
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Tickets", len(view))
-c2.metric("Category accuracy", f"{view['category_correct'].mean():.0%}")
-c3.metric("Urgency accuracy", f"{view['urgency_correct'].mean():.0%}")
-c4.metric(
-    "False High",
-    int(view["false_high"].sum()),
-    help="Tickets the model called High that weren't really High",
-)
+for col, label, value in (
+    (c1, "Tickets", f"{n_tickets:,}"),
+    (c2, "Category accuracy", f"{cat_pct:.0%}"),
+    (c3, "Urgency accuracy", f"{urg_pct:.0%}"),
+    (c4, "False High", f"{n_false_high:,}"),
+):
+    col.markdown(
+        f"<div style='padding:0.75rem 1rem;border:1px solid #ddd;border-radius:6px;"
+        f"background:#fff'><div style='font-size:0.75rem;color:#666'>{label}</div>"
+        f"<div style='font-size:1.6rem;font-weight:700'>{value}</div></div>",
+        unsafe_allow_html=True,
+    )
 
 st.subheader("Accuracy by version")
-acc = data.groupby("version")[["category_correct", "urgency_correct"]].mean()
-st.bar_chart(acc, stack=False)
+acc = (
+    data.groupby("version")[["category_correct", "urgency_correct"]]
+    .mean()
+    .astype(float)
+)
+st.bar_chart(acc)
 
 left, right = st.columns(2)
 with left:
     st.subheader(f"Error types in {version}")
-    st.bar_chart(view["error_type"].value_counts())
+    st.bar_chart(view["error_type"].value_counts().astype(float))
 with right:
     st.subheader(f"Urgency: model vs answer key ({version})")
     st.dataframe(pd.crosstab(view["true_urgency"], view["pred_urgency"]))
