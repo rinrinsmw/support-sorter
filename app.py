@@ -1,127 +1,133 @@
 # app.py: Support Sorter dashboard in Streamlit
-# Run it with:  python -m streamlit run app.py
-#
-# Remember: Streamlit reruns this whole file from top to bottom every time
-# someone changes a filter. Caching (below) keeps that fast.
+# Run:  python -m streamlit run app.py
 
-import streamlit as st
-import pandas as pd
+import os
+
 import gspread
-from streamlit.errors import StreamlitSecretNotFoundError
+import pandas as pd
+import streamlit as st
 
 SHEET_ID = "13ytynvOcmhLa5RzkA5zpEHwwX97kbykGwjDgUf6KV7w"
-TAB = "dashboard_data"   # the tab build_dashboard_data.py makes (one row per ticket per version)
+TAB = "dashboard_data"
 
-# Page settings: browser-tab title and a wide layout so the charts have room.
 st.set_page_config(page_title="Support Sorter", layout="wide")
 
 
 def gspread_client():
-    """Streamlit Cloud: [gcp_service_account] in App settings → Secrets. Local: service_account.json."""
+    """Cloud: [gcp_service_account] in App settings → Secrets. Local: service_account.json."""
     try:
         if "gcp_service_account" in st.secrets:
             return gspread.service_account_from_dict(dict(st.secrets["gcp_service_account"]))
-    except StreamlitSecretNotFoundError:
+    except Exception:
+        # No secrets file (local) or secrets not configured yet (cloud)
         pass
-    except Exception as e:
-        st.error(f"Could not read **gcp_service_account** from Streamlit Secrets: {e}")
-        st.stop()
-
-    import os
 
     if os.path.isfile("service_account.json"):
         return gspread.service_account(filename="service_account.json")
 
+    return None
+
+
+def fetch_records():
+    gc = gspread_client()
+    if gc is None:
+        return None
+    ws = gc.open_by_key(SHEET_ID).worksheet(TAB)
+    return ws.get_all_records()
+
+
+@st.cache_data(ttl=600)
+def records_to_dataframe(records: tuple[tuple[str, str], ...]):
+    """Cache sheet rows only — no st.secrets or Streamlit UI calls here."""
+    df = pd.DataFrame([dict(row) for row in records])
+    for col in ["category_correct", "urgency_correct", "false_high"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    if "version" in df.columns:
+        df["version"] = df["version"].astype(str).str.strip()
+    return df
+
+
+def records_cache_key(records: list) -> tuple[tuple[str, str], ...]:
+    if not records:
+        return ()
+    keys = list(records[0].keys())
+    return tuple(tuple(str(row.get(k, "")) for k in keys) for row in records)
+
+
+st.sidebar.markdown("**Filters**")
+
+raw = fetch_records()
+if raw is None:
     st.error(
         "Google credentials not found.\n\n"
-        "**On Streamlit Cloud:** open **Manage app → Settings → Secrets** and paste your "
-        "`[gcp_service_account]` block (same as `.streamlit/secrets.toml` locally). "
-        "Saving secrets does not use the repo file — you must paste in the Cloud UI.\n\n"
-        "**Locally:** keep `service_account.json` in the project root."
+        "**Streamlit Cloud:** **Manage app → Settings → Secrets** — paste the full "
+        "`[gcp_service_account]` block from your local `.streamlit/secrets.toml` "
+        "(not the repo; Cloud does not read that file).\n\n"
+        "**Local:** add `service_account.json` in the project root."
     )
     st.stop()
 
+try:
+    data = records_to_dataframe(records_cache_key(raw))
+except Exception as e:
+    st.error(f"Could not load sheet tab `{TAB}`: {type(e).__name__}: {e}")
+    st.stop()
 
-# ---------- 1. Load the data ----------
-# @st.cache_data remembers the result, so the sheet is read at most once
-# every 600 seconds (10 min) instead of on every click.
-@st.cache_data(ttl=600)
-def load():
-    gc = gspread_client()
-    ws = gc.open_by_key(SHEET_ID).worksheet(TAB)                     # open the tab by name
-    df = pd.DataFrame(ws.get_all_records())                          # header row becomes column names
-    # Make sure the 0/1 columns are numbers, so averages work.
-    for col in ["category_correct", "urgency_correct", "false_high"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-    return df
+st.title("Support Sorter")
+st.caption(
+    "An LLM sorts support tickets by category and urgency. "
+    "Each version is scored against 50 hand-labeled reference tickets."
+)
 
-data = load()
-
-# A button to force a fresh read (it clears the cache, then reruns).
+versions = sorted(data["version"].unique(), key=lambda v: int(str(v)[1:]))
+version = st.sidebar.selectbox("Version", versions, index=len(versions) - 1)
 if st.sidebar.button("Refresh data"):
     st.cache_data.clear()
     st.rerun()
+view = data[data["version"] == version]
 
-
-# ---------- 2. Header ----------
-st.title("Support Sorter")
-st.caption("An LLM sorts support tickets by category and urgency. "
-           "Each version is scored against 50 hand-labeled reference tickets.")
-
-
-# ---------- 3. Sidebar filter ----------
-# st.selectbox draws a dropdown, and `version` holds whatever the user picked.
-versions = sorted(data["version"].unique())                  # e.g. ['v1', 'v2', 'v3']
-version = st.sidebar.selectbox("Version", versions, index=len(versions) - 1)  # default: newest
-view = data[data["version"] == version]                       # only that version's rows
-
-
-# ---------- 4. Headline numbers for the chosen version ----------
-# The mean of a 0/1 column is the share of 1s, which is the accuracy.
-c1, c2, c3, c4 = st.columns(4)   # four boxes side by side
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Tickets", len(view))
 c2.metric("Category accuracy", f"{view['category_correct'].mean():.0%}")
 c3.metric("Urgency accuracy", f"{view['urgency_correct'].mean():.0%}")
-c4.metric("False High", int(view["false_high"].sum()),
-          help="Tickets the model called High that weren't really High")
+c4.metric(
+    "False High",
+    int(view["false_high"].sum()),
+    help="Tickets the model called High that weren't really High",
+)
 
-
-# ---------- 5. Accuracy by version (all versions) ----------
 st.subheader("Accuracy by version")
 acc = data.groupby("version")[["category_correct", "urgency_correct"]].mean()
-st.bar_chart(acc, stack=False)   # stack=False puts the bars side by side
+st.bar_chart(acc, stack=False)
 
-
-# ---------- 6. Error types for the chosen version ----------
 left, right = st.columns(2)
-
 with left:
     st.subheader(f"Error types in {version}")
-    # value_counts() counts how many rows have each error_type (OK, WRONG_URGENCY, ...)
-    errors = view["error_type"].value_counts()
-    st.bar_chart(errors)
-
+    st.bar_chart(view["error_type"].value_counts())
 with right:
     st.subheader(f"Urgency: model vs answer key ({version})")
-    # crosstab is a confusion matrix: rows = the true label, columns = what the model said.
-    # The diagonal is correct, and everything else is a miss.
-    matrix = pd.crosstab(view["true_urgency"], view["pred_urgency"])
-    st.dataframe(matrix)
+    st.dataframe(pd.crosstab(view["true_urgency"], view["pred_urgency"]))
 
-
-# ---------- 7. The misses, so you can review them ----------
 st.subheader(f"Tickets {version} got wrong")
 misses = view[view["error_type"] != "OK"]
 if misses.empty:
-    st.success("No misses in this version! 🎉")
+    st.success("No misses in this version!")
 else:
     st.dataframe(
-        misses[["ticket_id", "true_category", "pred_category",
-                "true_urgency", "pred_urgency", "confidence", "error_type"]],
+        misses[
+            [
+                "ticket_id",
+                "true_category",
+                "pred_category",
+                "true_urgency",
+                "pred_urgency",
+                "confidence",
+                "error_type",
+            ]
+        ],
         hide_index=True,
     )
 
-
-# ---------- 8. Full data (folded away) ----------
 with st.expander("See all rows for this version"):
     st.dataframe(view, hide_index=True)
