@@ -1,0 +1,7 @@
+-r requirements.txt
+python-dotenv>=1.0
+requests>=2.31
+openai>=3.0
+fastapi>=0.115
+uvicorn>=0.30
+scalar-fastapi>=1.0

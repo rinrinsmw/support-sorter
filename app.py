@@ -51,7 +51,15 @@ def records_to_dataframe(records_json: str):
 
 st.sidebar.markdown("**Filters**")
 
-raw = fetch_records()
+try:
+    raw = fetch_records()
+except gspread.exceptions.WorksheetNotFound:
+    st.error(f"Sheet tab `{TAB}` not found. Run `build_dashboard_data.py` once to create it.")
+    st.stop()
+except Exception as e:
+    st.error(f"Could not read Google Sheet: {type(e).__name__}: {e}")
+    st.stop()
+
 if raw is None:
     st.error(
         "Google credentials not found.\n\n"
