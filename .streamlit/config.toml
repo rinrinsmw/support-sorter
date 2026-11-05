@@ -1,9 +1,11 @@
-[server]
-headless = true
-fileWatcherType = "none"
+# Install as:  .streamlit/config.toml  (project-local; do NOT put secrets here)
+# Streamlit reads this for theme tokens so widgets/tables get light, readable text.
+# Purple is only the accent (buttons/focus); version chart colours live in app.py.
 
-[browser]
-gatherUsageStats = false
-
-[runner]
-fastReruns = true
+[theme]
+base = "light"
+primaryColor = "#7B5CFA"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F5F7"
+textColor = "#1F2937"
+font = "sans serif"
